@@ -17,6 +17,7 @@ module Kemal
     @@handlers = [] of HTTP::Handler
     @@custom_handlers = [] of Tuple(Nil | Int32, HTTP::Handler)
     @@filter_handlers = [] of HTTP::Handler
+    @@mounted_apps = [] of Kemal::Application.class
     @@error_handlers = {} of Int32 => HTTP::Server::Context, Exception -> String
     @@error_handler : HTTP::Handler?
     @@router_included = false
@@ -32,6 +33,7 @@ module Kemal
       @@custom_handlers.clear
       @@filter_handlers.clear
       @@error_handlers.clear
+      @@mounted_apps.clear
     end
 
     def self.handlers
@@ -61,27 +63,20 @@ module Kemal
 
     def self.setup
       unless @@default_handlers_setup && @@router_included
-        setup_init_handler
-        setup_log_handler
         setup_error_handler
         setup_static_file_handler
         setup_custom_handlers
         setup_filter_handlers
         @@default_handlers_setup = true
         @@router_included = true
+        setup_mounted_apps
         @@handlers.insert(@@handlers.size, websocket_handler)
         @@handlers.insert(@@handlers.size, route_handler)
       end
     end
 
-    private def self.setup_init_handler
-      @@handlers.insert(@@handler_position, init_handler)
-      @@handler_position += 1
-    end
-
-    private def self.setup_log_handler
-      @@handlers.insert(@@handler_position, config.logger)
-      @@handler_position += 1
+    def self.mount(app : Kemal::Application.class)
+      @@mounted_apps << app
     end
 
     private def self.setup_error_handler
@@ -110,6 +105,13 @@ module Kemal
     private def self.setup_filter_handlers
       @@filter_handlers.each do |h|
         @@handlers.insert(@@handler_position, h)
+      end
+    end
+
+    private def self.setup_mounted_apps
+      @@mounted_apps.each do |mounted_app|
+        mounted_app.setup
+        @@handlers += mounted_app.handlers
       end
     end
   end

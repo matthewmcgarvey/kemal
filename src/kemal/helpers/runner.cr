@@ -35,7 +35,12 @@ module Kemal
           setup_trap_signal
         end
 
-        server = config.server ||= HTTP::Server.new(config.handlers)
+        server = config.server ||= begin
+          handlers = config.handlers
+          handlers = [InitHandler.new(self), config.logger] + handlers
+          handlers << EndOfLineHandler.new
+          HTTP::Server.new(handlers)
+        end
 
         config.running = true
 

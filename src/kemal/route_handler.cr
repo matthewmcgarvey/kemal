@@ -13,7 +13,18 @@ module Kemal
     end
 
     def call(context : HTTP::Server::Context)
-      process_request(context)
+      lookup_result = lookup_route(context)
+      return if context.response.closed?
+      return call_next(context) if lookup_result.nil? || !lookup_result.found?
+
+      content = lookup_result.payload.handler.call(context)
+
+      if !@app.error_handlers.empty? && @app.error_handlers.has_key?(context.response.status_code)
+        raise Kemal::Exceptions::CustomException.new(context)
+      end
+
+      context.response.print(content)
+      context
     end
 
     # Adds a given route to routing tree. As an exception each `GET` route additionaly defines
@@ -43,21 +54,6 @@ module Kemal
       end
 
       route
-    end
-
-    # Processes the route if it's a match. Otherwise renders 404.
-    private def process_request(context)
-      lookup_result = lookup_route(context)
-      raise Kemal::Exceptions::RouteNotFound.new(context) unless lookup_result.found?
-      return if context.response.closed?
-      content = lookup_result.payload.handler.call(context)
-
-      if !@app.error_handlers.empty? && @app.error_handlers.has_key?(context.response.status_code)
-        raise Kemal::Exceptions::CustomException.new(context)
-      end
-
-      context.response.print(content)
-      context
     end
 
     private def radix_path(method, path)
